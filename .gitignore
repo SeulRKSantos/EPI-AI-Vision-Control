@@ -24,3 +24,8 @@ docker/data/
  
 # Sistema
 .DS_Store
+
+# Pesos copiados pro container de vision em build/runtime
+vision/models/*.pt
+vision/models/*.onnx
+!vision/models/.gitkeep
