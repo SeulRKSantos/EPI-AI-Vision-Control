@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+ 
+# Treinamento YOLO (pesado, não versiona)
+training/runs/
+training/datasets/raw/*
+training/datasets/annotated/*
+training/weights/*.pt
+training/weights/*.onnx
+!training/datasets/raw/.gitkeep
+!training/datasets/annotated/.gitkeep
+!training/weights/.gitkeep
+ 
+# Ambiente / segredos
+.env
+firmware/esp32_access_gate/config.h
+ 
+# Dados persistidos do container (postgres, mosquitto)
+docker/data/
+ 
+# Sistema
+.DS_Store
