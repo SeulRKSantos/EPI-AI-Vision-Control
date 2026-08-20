@@ -1,0 +1,45 @@
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - mosquitto_data:/mosquitto/data
+    ports:
+      - "1883:1883"
+
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+
+  backend:
+    build:
+      context: ./backend
+    env_file: .env
+    depends_on:
+      - db
+      - mosquitto
+    ports:
+      - "8000:8000"
+
+  vision:
+    build:
+      context: ./vision
+    env_file: .env
+    depends_on:
+      - mosquitto
+    devices:
+      - /dev/video0:/dev/video0
+    volumes:
+      - ./training/weights:/app/models:ro
+
+volumes:
+  db_data:
+  mosquitto_data:
