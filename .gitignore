@@ -29,3 +29,4 @@ docker/data/
 vision/models/*.pt
 vision/models/*.onnx
 !vision/models/.gitkeep
+*.save

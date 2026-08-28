@@ -98,3 +98,30 @@ def test_openapi_document_is_generated():
     response = client.get("/openapi.json")
     assert response.status_code == 200
     assert "/health" in response.json()["paths"]
+def test_readiness_reports_unavailable_database(monkeypatch):
+    """When the database cannot be reached, readiness must fail rather than lie."""
+    import app.api.v1.health as health_module
+
+    class BrokenSession:
+        async def __aenter__(self):
+            raise ConnectionError("simulated outage")
+        async def __aexit__(self, *args):
+            return False
+
+    monkeypatch.setattr(health_module, "SessionFactory", lambda: BrokenSession())
+
+    response = client.get("/health/ready")
+    assert response.status_code == 503
+    body = response.json()
+    assert body["ready"] is False
+    assert body["checks"]["database"] == "unavailable"
+
+
+def test_readiness_succeeds_when_database_is_reachable():
+    """Complements the test above: with a live database, readiness passes."""
+    import os
+    if not os.getenv("TEST_DATABASE_URL"):
+        import pytest
+        pytest.skip("no database configured")
+    response = client.get("/health/ready")
+    assert response.status_code == 200
