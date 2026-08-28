@@ -5,11 +5,16 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.api.v1.router import api_router
 from app.api.v1.health import router as health_router
+from app.api.v1.router import api_router
+from app.core import topics
 from app.core.config import settings
 from app.core.logging import configure_logging
-from app.db.session import dispose_engine
+from app.core.mqtt_client import mqtt_client
+from app.db.session import SessionFactory, dispose_engine
+from app.services.access_flow import AccessFlow
+from app.services.rfid_handler import MessageHandlers
+from app.services.session_manager import SessionManager
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -19,18 +24,35 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Owns the lifecycle of every long-lived resource.
 
-    The MQTT client and its consumer task join this block in stage 5. Keeping
-    them here — rather than at import time — is what lets the REST API and the
-    message consumer share one event loop without blocking each other.
+    The REST API and the MQTT consumer share this event loop. Neither blocks
+    the other: the consumer awaits messages, and each scan awaits its vision
+    result, so the API stays responsive throughout.
     """
     logger.info(
         "Starting service",
         extra={"environment": settings.environment, "app": settings.app_name},
     )
 
+    sessions = SessionManager(cooldown_seconds=settings.badge_cooldown_seconds)
+    flow = AccessFlow(mqtt_client, sessions, SessionFactory)
+    handlers = MessageHandlers(flow)
+
+    mqtt_client.register(topics.BADGE_SCAN_SUB, handlers.on_badge_scan)
+    mqtt_client.register(topics.VISION_RESULT_SUB, handlers.on_vision_result)
+    mqtt_client.register(topics.GATE_STATUS_SUB, handlers.on_gate_status)
+
+    await mqtt_client.start()
+
+    # Exposed for the API layer (the scan simulation endpoint).
+    app.state.mqtt = mqtt_client
+    app.state.sessions = sessions
+    app.state.flow = flow
+
     yield
 
     logger.info("Shutting down service")
+    await mqtt_client.stop()
+    sessions.clear()
     await dispose_engine()
 
 

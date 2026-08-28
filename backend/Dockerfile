@@ -6,9 +6,8 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /app
 
 # Dependencies first: this layer is cached until pyproject.toml changes.
-# The dev extras bring in pytest so the suite can run inside the container.
 COPY pyproject.toml .
-RUN pip install --no-cache-dir ".[dev]"
+RUN pip install --no-cache-dir .
 
 COPY alembic.ini .
 COPY app/ ./app/

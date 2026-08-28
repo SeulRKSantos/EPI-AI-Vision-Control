@@ -6,6 +6,7 @@ from fastapi import APIRouter, Response, status
 from sqlalchemy import text
 
 from app.core.config import settings
+from app.core.mqtt_client import mqtt_client
 from app.db.session import SessionFactory
 
 logger = logging.getLogger(__name__)
@@ -39,7 +40,7 @@ async def readiness(response: Response) -> dict[str, object]:
         logger.warning("Database readiness check failed", extra={"error": str(exc)})
         checks["database"] = "unavailable"
 
-    # The MQTT check is added in stage 5, when the client joins the lifespan.
+    checks["mqtt"] = "ok" if mqtt_client.is_connected else "unavailable"
 
     ready = all(value == "ok" for value in checks.values())
     if not ready:
