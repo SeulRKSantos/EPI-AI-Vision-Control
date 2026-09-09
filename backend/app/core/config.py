@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     environment: str = Field(default="development")
     log_level: str = Field(default="INFO")
     api_v1_prefix: str = "/api/v1"
+    # Origins allowed to call the API from a browser (the admin panel).
+    cors_origins: list[str] = Field(
+        default=["http://localhost:5173", "http://localhost:4173"]
+    )
 
     # --- Database ---
     postgres_host: str = Field(default="db")

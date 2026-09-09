@@ -19,37 +19,46 @@ from app.db.session import SessionFactory, dispose_engine
 logger = logging.getLogger(__name__)
 
 # `code` must match the class names the vision model outputs.
+# Kept to the items a gate-mounted camera can actually see: footwear is
+# deliberately absent, since it falls outside the frame at chest height.
 PPE_TYPES = [
     ("helmet", "Capacete", "Capacete de segurança"),
     ("goggles", "Óculos", "Óculos de proteção"),
-    ("mask", "Máscara", "Máscara ou respirador"),
-    ("gloves", "Luvas", "Luvas de proteção"),
-    ("vest", "Colete", "Colete refletivo"),
+    ("face_shield", "Protetor facial", "Protetor facial"),
+    ("respirator", "Respirador", "Respirador ou máscara química"),
     ("ear_protection", "Protetor auricular", "Protetor auditivo"),
-    ("boots", "Botas", "Calçado de segurança"),
+    ("vest", "Colete", "Colete refletivo"),
+    ("gloves", "Luvas", "Luvas de proteção"),
+    ("coverall", "Macacão", "Macacão ou avental químico"),
+    ("harness", "Cinturão", "Cinturão paraquedista para trabalho em altura"),
 ]
 
 # role code -> (name, description, required PPE codes)
 ROLES = {
-    "operator": (
-        "Operador",
-        "Operador de máquinas na área produtiva",
-        ["helmet", "goggles", "gloves", "boots"],
-    ),
     "electrician": (
         "Eletricista",
         "Manutenção elétrica industrial",
-        ["helmet", "goggles", "gloves", "boots"],
+        ["helmet", "goggles", "gloves", "coverall"],
     ),
-    "technician": (
-        "Técnico",
-        "Técnico de manutenção mecânica",
-        ["helmet", "goggles", "boots"],
+    "height_technician": (
+        "Técnico de manutenção em altura",
+        "Manutenção em estruturas elevadas",
+        ["helmet", "harness", "gloves", "goggles"],
     ),
-    "visitor": (
-        "Visitante",
-        "Acompanhante autorizado em visita à planta",
-        ["helmet", "vest"],
+    "chemist": (
+        "Químico",
+        "Manipulação de produtos químicos em laboratório e planta",
+        ["goggles", "respirator", "gloves", "coverall"],
+    ),
+    "operator": (
+        "Operador",
+        "Operação de máquinas na área produtiva",
+        ["helmet", "goggles", "gloves", "ear_protection", "vest"],
+    ),
+    "office": (
+        "Escritório",
+        "Atividades administrativas, sem exigência de EPI",
+        [],
     ),
 }
 
@@ -61,8 +70,9 @@ GATES = [
 EMPLOYEES = [
     ("BADGE001", "Funcionário Operação", "1001", "operator"),
     ("BADGE002", "Funcionário Elétrica", "1002", "electrician"),
-    ("BADGE003", "Funcionário Manutenção", "1003", "technician"),
-    ("BADGE004", "Visitante Autorizado", "1004", "visitor"),
+    ("BADGE003", "Funcionário Altura", "1003", "height_technician"),
+    ("BADGE004", "Funcionário Laboratório", "1004", "chemist"),
+    ("BADGE005", "Funcionário Escritório", "1005", "office"),
 ]
 
 

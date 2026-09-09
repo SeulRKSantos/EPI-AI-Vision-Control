@@ -4,6 +4,7 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.health import router as health_router
 from app.api.v1.router import api_router
@@ -61,6 +62,17 @@ app = FastAPI(
     version="0.1.0",
     description="Access control backend for EPI-AI-Vision-Control",
     lifespan=lifespan,
+)
+
+# The admin panel runs on its own origin, so the browser needs explicit
+# permission to call this API. The allowed origins are configuration, not a
+# constant: a deployment behind one hostname should not have to ship code.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Health lives at the root so probes don't depend on the API version prefix.
