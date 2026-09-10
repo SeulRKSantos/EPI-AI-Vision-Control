@@ -17,7 +17,6 @@ training/weights/*.onnx
  
 # Ambiente / segredos
 .env
-firmware/esp32_access_gate/config.h
  
 # Dados persistidos do container (postgres, mosquitto)
 docker/data/
