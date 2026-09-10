@@ -256,7 +256,46 @@ function PPEForm({ target, onClose, onSaved }) {
 export function Roles() {
   const { push } = useToast();
   const [creating, setCreating] = useState(false);
+  const [confirming, setConfirming] = useState(null);
+  const [busyCode, setBusyCode] = useState(null);
+
   const roles = useResource(() => api.roles.list({ include_inactive: true }), []);
+  // Loaded so a deactivation can state who loses access, not just that some
+  // people will. Deactivating a role denies every badge attached to it.
+  const employees = useResource(
+    () => api.employees.list({ include_inactive: false }),
+    []
+  );
+
+  const affectedBy = (roleCode) =>
+    (employees.data || []).filter((e) => e.role.code === roleCode);
+
+  const deactivate = async (role) => {
+    setBusyCode(role.code);
+    try {
+      await api.roles.deactivate(role.code);
+      push(`Função ${role.name} desativada.`);
+      setConfirming(null);
+      roles.reload();
+    } catch (err) {
+      push(err.message, "error");
+    } finally {
+      setBusyCode(null);
+    }
+  };
+
+  const reactivate = async (role) => {
+    setBusyCode(role.code);
+    try {
+      await api.roles.update(role.code, { is_active: true });
+      push(`Função ${role.name} reativada.`);
+      roles.reload();
+    } catch (err) {
+      push(err.message, "error");
+    } finally {
+      setBusyCode(null);
+    }
+  };
 
   const [form, setForm] = useState({ code: "", name: "", description: "" });
   const [busy, setBusy] = useState(false);
@@ -321,10 +360,93 @@ export function Roles() {
                   </ul>
                 )}
               </div>
+
+              <div className="mt-3 pt-3 border-t border-ink-line flex items-center justify-between gap-2">
+                <span className="text-xs text-ink-mute">
+                  {affectedBy(role.code).length === 0
+                    ? "Nenhum funcionário"
+                    : `${affectedBy(role.code).length} funcionário${
+                        affectedBy(role.code).length > 1 ? "s" : ""
+                      }`}
+                </span>
+                {role.is_active ? (
+                  <Button
+                    tone="danger"
+                    className="px-2.5 py-1"
+                    disabled={busyCode === role.code}
+                    onClick={() => setConfirming(role)}
+                  >
+                    Desativar
+                  </Button>
+                ) : (
+                  <Button
+                    tone="quiet"
+                    className="px-2.5 py-1"
+                    disabled={busyCode === role.code}
+                    onClick={() => reactivate(role)}
+                  >
+                    Reativar
+                  </Button>
+                )}
+              </div>
             </div>
           ))}
         </div>
       )}
+
+      <Modal
+        open={Boolean(confirming)}
+        onClose={() => setConfirming(null)}
+        title={confirming ? `Desativar ${confirming.name}?` : ""}
+      >
+        {confirming && (
+          <div className="space-y-4">
+            <p className="text-sm text-ink-soft">
+              A função deixa de aparecer na matriz e o cadastro é preservado — o
+              histórico de acessos continua legível.
+            </p>
+
+            {affectedBy(confirming.code).length > 0 ? (
+              <div className="border-l-4 border-signal-denied bg-signal-deniedWash px-4 py-3">
+                <p className="text-sm text-ink font-medium">
+                  {affectedBy(confirming.code).length} funcionário
+                  {affectedBy(confirming.code).length > 1 ? "s" : ""} perde
+                  {affectedBy(confirming.code).length > 1 ? "m" : ""} o acesso no
+                  portão:
+                </p>
+                <ul className="mt-2 space-y-0.5">
+                  {affectedBy(confirming.code).map((e) => (
+                    <li key={e.badge_id} className="text-sm text-ink-soft">
+                      <span className="font-mono text-xs">{e.badge_id}</span> — {e.name}
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-sm text-ink-soft mt-2">
+                  Para manter o acesso, mude a função dessas pessoas antes de
+                  desativar.
+                </p>
+              </div>
+            ) : (
+              <p className="text-sm text-ink-mute">
+                Nenhum funcionário ativo usa esta função.
+              </p>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" tone="quiet" onClick={() => setConfirming(null)}>
+                Cancelar
+              </Button>
+              <Button
+                tone="danger"
+                disabled={busyCode === confirming.code}
+                onClick={() => deactivate(confirming)}
+              >
+                {busyCode === confirming.code ? "Desativando" : "Desativar função"}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       <Modal open={creating} onClose={() => setCreating(false)} title="Criar função">
         <form onSubmit={submit} className="space-y-4">
