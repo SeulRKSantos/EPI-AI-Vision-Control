@@ -46,6 +46,9 @@ services:
   vision:
     build:
       context: ./vision
+    restart: unless-stopped
+    environment:
+      MQTT_CLIENT_ID: epi-vision
     env_file: .env
     depends_on:
       - mosquitto
