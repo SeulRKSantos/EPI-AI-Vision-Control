@@ -23,7 +23,7 @@ class StubDetector(Detector):
     """Skips the SDK client, which the parser does not need."""
 
     def __init__(self, class_map):
-        self._class_map = class_map
+        self._class_map = self.build_lookup(class_map)
         self._unmapped_seen = set()
 
 
@@ -98,6 +98,52 @@ def test_class_with_space_in_name():
 def test_prediction_without_class_is_skipped():
     out = parse(workflow([{"confidence": 0.9}, {"class": "helmet", "confidence": 0.8}]))
     check(len(out) == 1, "predicao sem classe e descartada")
+
+
+# --- Name normalization ---------------------------------------------------
+
+def test_lookup_ignores_case():
+    """Regression: the workflow returned 'Capacete' while the map said 'capacete'."""
+    detector = StubDetector({"capacete": "helmet"})
+    for variant in ["Capacete", "capacete", "CAPACETE"]:
+        check(detector.map_class(variant) == "helmet", f"caixa ignorada: {variant}")
+
+
+def test_lookup_ignores_accents():
+    detector = StubDetector({"oculos": "goggles"})
+    for variant in ["Oculos", "Óculos", "óculos", "ÓCULOS"]:
+        check(detector.map_class(variant) == "goggles", f"acento ignorado: {variant}")
+
+
+def test_lookup_ignores_separators():
+    detector = StubDetector({"safety vest": "vest"})
+    for variant in ["Safety Vest", "safety_vest", "Safety-Vest", "  safety   vest "]:
+        check(detector.map_class(variant) == "vest", f"separador ignorado: {variant!r}")
+
+
+def test_comment_keys_are_not_classes():
+    detector = StubDetector({"_comment": "texto", "capacete": "helmet"})
+    check(detector.map_class("_comment") is None, "chave de comentario nao vira classe")
+
+
+def test_real_class_map_covers_workflow_names():
+    """The names the Roboflow workflow was seen emitting must all resolve."""
+    import json
+    real = json.loads((Path(__file__).resolve().parent.parent / "class_map.json").read_text())
+    detector = StubDetector(real)
+    for name, code in [("Capacete", "helmet"), ("Oculos", "goggles"),
+                       ("Glove", "gloves"), ("Headphones", "ear_protection")]:
+        check(detector.map_class(name) == code, f"mapa real resolve {name}")
+
+
+def test_real_class_map_targets_only_known_codes():
+    """A typo on the right-hand side would map a class onto nothing the backend knows."""
+    import json
+    real = json.loads((Path(__file__).resolve().parent.parent / "class_map.json").read_text())
+    known = {"helmet", "goggles", "respirator", "ear_protection", "vest",
+             "gloves", "coverall", "harness"}
+    targets = {v for k, v in real.items() if not k.startswith("_")}
+    check(targets <= known, f"codigos desconhecidos: {sorted(targets - known)}")
 
 
 # --- Confidence -----------------------------------------------------------

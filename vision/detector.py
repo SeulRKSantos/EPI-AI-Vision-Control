@@ -8,9 +8,25 @@ without redeploying this service.
 """
 
 import logging
+import re
+import unicodedata
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
+
+
+def normalize_class_name(name: str) -> str:
+    """Folds case, accents and separators so near-identical names match.
+
+    Class names are typed by whoever labels the dataset, and "Capacete",
+    "capacete" and "CAPACETE" are the same class. So are "Óculos" and
+    "oculos", and "safety vest", "safety_vest" and "Safety-Vest". Matching on
+    the folded form keeps a cosmetic difference in the dataset from silently
+    turning into "equipment not detected".
+    """
+    decomposed = unicodedata.normalize("NFKD", name)
+    without_accents = "".join(c for c in decomposed if not unicodedata.combining(c))
+    return re.sub(r"[\s_\-]+", "-", without_accents.strip().lower())
 
 
 @dataclass(frozen=True)
@@ -30,7 +46,7 @@ class Detector:
     ) -> None:
         self._workspace = workspace
         self._workflow = workflow
-        self._class_map = class_map
+        self._class_map = self.build_lookup(class_map)
         self._unmapped_seen: set[str] = set()
 
         # Imported here so the module can be loaded (and tested) without the
@@ -40,6 +56,19 @@ class Detector:
         self._client = InferenceHTTPClient(
             api_url=api_url, api_key=api_key
         ).configure(InferenceConfiguration(api_key_transport="header"))
+
+    @staticmethod
+    def build_lookup(class_map: dict[str, str]) -> dict[str, str]:
+        """Indexes the class map by normalized name, skipping comment keys."""
+        return {
+            normalize_class_name(key): value
+            for key, value in class_map.items()
+            if not key.startswith("_")
+        }
+
+    def map_class(self, class_name: str) -> str | None:
+        """The PPE code for a model class, or None when it has no mapping."""
+        return self._class_map.get(normalize_class_name(class_name))
 
     def detect(self, frame) -> list[Detection]:
         result = self._client.run_workflow(
@@ -63,7 +92,7 @@ class Detector:
             if not class_name:
                 continue
 
-            ppe_code = self._class_map.get(class_name)
+            ppe_code = self.map_class(class_name)
             if ppe_code is None:
                 # Logged once per class: a model class with no mapping will
                 # never count as detected, and silence would make that look
