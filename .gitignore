@@ -30,3 +30,7 @@ vision/models/*.pt
 vision/models/*.onnx
 !vision/models/.gitkeep
 *.save
+
+# Firmware build output and site credentials
+firmware/**/.pio/
+firmware/**/include/config.h
