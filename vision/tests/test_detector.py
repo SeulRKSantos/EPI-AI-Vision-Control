@@ -126,14 +126,57 @@ def test_comment_keys_are_not_classes():
     check(detector.map_class("_comment") is None, "chave de comentario nao vira classe")
 
 
-def test_real_class_map_covers_workflow_names():
-    """The names the Roboflow workflow was seen emitting must all resolve."""
+def _real_detector():
     import json
     real = json.loads((Path(__file__).resolve().parent.parent / "class_map.json").read_text())
-    detector = StubDetector(real)
-    for name, code in [("Capacete", "helmet"), ("Oculos", "goggles"),
-                       ("Glove", "gloves"), ("Headphones", "ear_protection")]:
+    return StubDetector(real)
+
+
+def test_real_class_map_covers_workflow_names():
+    """The exact names the epis-v2-logic workflow emits, spelled as it spells them."""
+    detector = _real_detector()
+    for name, code in [
+        ("Capacete", "helmet"),
+        ("Óculos", "goggles"),
+        ("Luvas", "gloves"),
+        ("Protetor_Auricular", "ear_protection"),
+        ("Macacão", "coverall"),
+        ("Cinto de segurança", "harness"),
+    ]:
         check(detector.map_class(name) == code, f"mapa real resolve {name}")
+
+
+def test_trouser_belt_is_not_fall_protection():
+    """Regression guard: 'Cinto' is a separate class from 'Cinto de segurança'.
+
+    Mapping it to harness would clear someone for work at height because they
+    wore a belt on their trousers.
+    """
+    detector = _real_detector()
+    check(detector.map_class("Cinto") is None, "Cinto (de calca) nao vira antiqueda")
+
+
+def test_non_ppe_classes_stay_unmapped():
+    """Clothing outside the requirement matrix must not satisfy anything."""
+    detector = _real_detector()
+    for name in ["Bota", "Calca", "Jaqueta"]:
+        check(detector.map_class(name) is None, f"{name} permanece sem mapeamento")
+
+
+def test_eye_makeup_distractor_is_never_goggles():
+    """'Rímel' is a negative class: dark circles and eye make-up the model used
+    to mistake for goggles. Mapping it would report goggles exactly when the
+    person is not wearing them."""
+    detector = _real_detector()
+    check(detector.map_class("Rímel") is None, "Rimel nunca vira EPI")
+
+
+def test_mascara_does_not_collide_across_languages():
+    """English 'mascara' is eye make-up; accent folding would make it match the
+    Portuguese 'máscara' (mask). Neither may map to respirator."""
+    detector = _real_detector()
+    for name in ["Mascara", "máscara"]:
+        check(detector.map_class(name) is None, f"{name} nao vira respirador")
 
 
 def test_real_class_map_targets_only_known_codes():

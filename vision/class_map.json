@@ -1,42 +1,35 @@
 {
-  "_comment": "Model class name -> ppe_types.code in the backend. Lookup ignores case, accents and separators, so 'Capacete', 'capacete' and 'CAPACETE' are one entry, as are 'safety vest' and 'Safety_Vest'. Classes absent from this file are ignored and logged once. Never map a negative class such as 'sem-capacete': the backend infers absence from what is missing, and mapping it would report the equipment as present.",
-
+  "_comment": "Model class name -> ppe_types.code in the backend. Lookup ignores case, accents and separators, so 'Capacete', 'capacete' and 'CAPACETE' are one entry, as are 'Protetor_Auricular' and 'protetor auricular'. Classes absent from this file are ignored and logged once.",
+  "_never_map": "Do not map 'Cinto': it is a separate class from 'Cinto de seguranca', so it is the trouser belt, and mapping it to harness would clear someone for work at height without fall protection. Do not map 'Rimel': it is a deliberate negative class that absorbs dark circles and eye make-up the model used to mistake for goggles, so mapping it would report goggles exactly when they are absent. Do not map 'mascara': in English it is eye make-up, and accent folding makes it collide with the Portuguese 'mascara' (mask). Never map negative classes such as 'sem-capacete'.",
+  "_model_classes": "Workflow epis-v2-logic: Bota, Calca, Capacete, Cinto, Jaqueta, Luvas, Macacao, Rimel, Oculos, Protetor_Auricular, Cinto de seguranca. Bota, Calca and Jaqueta are outside the requirement matrix; Cinto and Rimel are distractors. The model has no class for vest or respirator.",
   "capacete": "helmet",
   "helmet": "helmet",
   "hardhat": "helmet",
-
   "oculos": "goggles",
   "goggles": "goggles",
   "glasses": "goggles",
   "safety glasses": "goggles",
-
   "respirador": "respirator",
-  "mascara": "respirator",
   "respirator": "respirator",
   "mask": "respirator",
-
   "protetor auricular": "ear_protection",
   "abafador": "ear_protection",
   "ear protection": "ear_protection",
   "earmuffs": "ear_protection",
   "headphones": "ear_protection",
-
   "colete": "vest",
   "vest": "vest",
   "safety vest": "vest",
-
   "luva": "gloves",
   "luvas": "gloves",
   "glove": "gloves",
   "gloves": "gloves",
-
   "macacao": "coverall",
   "avental": "coverall",
   "coverall": "coverall",
   "apron": "coverall",
-
+  "cinto de seguranca": "harness",
   "cinturao": "harness",
-  "cinto": "harness",
   "harness": "harness",
   "safety harness": "harness"
 }
