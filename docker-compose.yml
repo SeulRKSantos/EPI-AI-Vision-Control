@@ -1,6 +1,7 @@
 services:
   mosquitto:
     image: eclipse-mosquitto:2
+    restart: unless-stopped
     volumes:
       - ./mosquitto/config:/mosquitto/config
       - mosquitto_data:/mosquitto/data
@@ -9,6 +10,7 @@ services:
 
   db:
     image: postgres:16
+    restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
@@ -20,6 +22,7 @@ services:
       - "5432:5432"
 
   backend:
+    restart: unless-stopped
     build:
       context: ./backend
     env_file: .env
@@ -28,6 +31,17 @@ services:
       - mosquitto
     ports:
       - "8000:8000"
+    volumes:
+      - ./backend/app:/app/app
+
+  frontend:
+    build:
+      context: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "3000:80"
 
   vision:
     build:
