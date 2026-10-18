@@ -85,8 +85,23 @@ def test_health_responds_without_dependencies():
     assert response.json()["status"] == "ok"
 
 
-def test_readiness_reports_unavailable_database():
-    """With no database reachable, readiness must fail rather than lie."""
+def test_readiness_reports_unavailable_database(monkeypatch):
+    """With the database unreachable, readiness must fail rather than lie.
+
+    The outage is simulated, so the answer is the same whether or not a real
+    database happens to be reachable from where the suite runs.
+    """
+    from app.api.v1 import health
+
+    class UnreachableDatabase:
+        async def __aenter__(self):
+            raise ConnectionRefusedError("database unreachable")
+
+        async def __aexit__(self, *exc):
+            return False
+
+    monkeypatch.setattr(health, "SessionFactory", UnreachableDatabase)
+
     response = client.get("/health/ready")
     assert response.status_code == 503
     body = response.json()
