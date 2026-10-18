@@ -32,7 +32,7 @@ constexpr char GATE_CODE[] = "gate-01";
 constexpr uint32_t DECISION_TIMEOUT_MS = 12000;
 
 /// How long the lock stays released after a grant.
-constexpr uint32_t UNLOCK_DURATION_MS = 5000;
+constexpr uint32_t UNLOCK_DURATION_MS = 20000;
 
 /// How long a refusal is shown before the reader accepts a badge again.
 constexpr uint32_t DENIED_DISPLAY_MS = 3000;

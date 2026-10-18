@@ -21,16 +21,31 @@ char topic_decision[96];
 char topic_status[96];
 char client_id[48];
 
+/// Drawn once per boot. The session counter restarts at 1 after every reset,
+/// so without this the gate would reuse session ids it already sent — and
+/// the backend, which keeps one audit record per session id, would reject
+/// every scan after a reboot.
+uint32_t boot_nonce = 0;
+
+/// The session id of the scan awaiting a decision. Only a decision carrying
+/// exactly this id is passed on.
+char pending_session[48] = "";
+
 /**
  * The backend correlates by `session_id`, a UUID. The gate tracks sessions
  * with a small counter, so the two are bridged by embedding the counter in a
- * UUID whose remaining digits identify this device. The value that comes
- * back is parsed out of the same position.
+ * UUID that also carries this device's id and the boot nonce. The counter is
+ * parsed back out of the last eight digits.
  */
 void session_to_uuid(uint32_t token, char* out, size_t size) {
   const uint32_t chip = static_cast<uint32_t>(ESP.getEfuseMac() & 0xFFFFFFFF);
-  snprintf(out, size, "%08x-0000-4000-8000-%04x%08x", chip,
-           static_cast<uint16_t>(token >> 16), token);
+  snprintf(out, size, "%08x-%04x-4%03x-8%03x-%04x%08x",
+           static_cast<unsigned>(chip),
+           static_cast<unsigned>(boot_nonce >> 16),
+           static_cast<unsigned>((boot_nonce >> 4) & 0xFFF),
+           static_cast<unsigned>(boot_nonce & 0xFFF),
+           static_cast<unsigned>((token >> 16) & 0xFFFF),
+           static_cast<unsigned>(token));
 }
 
 uint32_t uuid_to_session(const char* uuid) {
@@ -61,6 +76,14 @@ void on_message(char* topic, byte* payload, unsigned int length) {
     strncat(missing, item.as<const char*>(), sizeof(missing) - strlen(missing) - 1);
   }
 
+  // A decision for any other id — a late answer, a duplicate, or one meant
+  // for a session from before a reboot — is not ours to act on.
+  if (pending_session[0] == '\0' || strcasecmp(session_id, pending_session) != 0) {
+    Serial.println(F("decisao de outra sessao, descartada"));
+    return;
+  }
+  pending_session[0] = '\0';
+
   decision_handler(uuid_to_session(session_id), granted, missing);
 }
 
@@ -80,6 +103,13 @@ void Net::begin(DecisionHandler handler) {
   WiFi.mode(WIFI_STA);
   WiFi.setAutoReconnect(true);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+
+  // Drawn after the radio is up: esp_random() is a true random source only
+  // while WiFi or Bluetooth is running. Zero is avoided so the nonce is
+  // never mistaken for "unset".
+  do {
+    boot_nonce = esp_random();
+  } while (boot_nonce == 0);
 
   broker.setServer(MQTT_HOST, MQTT_PORT);
   broker.setCallback(on_message);
@@ -152,8 +182,13 @@ bool Net::publish_scan(uint32_t session_token, const char* badge_id) {
   if (written == 0) return false;
 
   // QoS 1: the decision depends on this message arriving.
-  return broker.publish(topic_scan, reinterpret_cast<const uint8_t*>(payload),
-                        written, false);
+  const bool sent = broker.publish(topic_scan, reinterpret_cast<const uint8_t*>(payload),
+                                   written, false);
+  if (sent) {
+    strncpy(pending_session, session_id, sizeof(pending_session) - 1);
+    pending_session[sizeof(pending_session) - 1] = '\0';
+  }
+  return sent;
 }
 
 void Net::publish_status(bool is_online) {
