@@ -204,11 +204,21 @@ async def run() -> None:
         workflow=settings.roboflow_workflow,
         class_map=settings.class_map,
     )
+    # A separate client for the live view, so a stuck live call can never
+    # hold up the inference a badge scan depends on.
+    live_detector = Detector(
+        api_url=settings.roboflow_api_url,
+        api_key=settings.roboflow_api_key,
+        workspace=settings.roboflow_workspace,
+        workflow=settings.roboflow_workflow,
+        class_map=settings.class_map,
+    )
     live = LiveView(
         camera,
-        detector,
+        live_detector,
         interval_s=settings.live_inference_interval_s,
         threshold=settings.display_threshold,
+        timeout_s=settings.inference_timeout_s,
     )
     service = VisionService(camera, detector, live)
 
