@@ -1,8 +1,12 @@
 /**
  * State machine tests.
  *
- * Run on the desktop, no board required:
+ * Run on the desktop, no board required, either way:
+ *   pio test -e native
  *   g++ -std=c++17 -I../../src test_main.cpp ../../src/access_state.cpp -o t && ./t
+ *
+ * Under PlatformIO the checks report through Unity, which its test runner
+ * expects; built by hand they print a plain summary.
  *
  * The emphasis is on the paths that must never open the lock.
  */
@@ -14,6 +18,11 @@
 
 using namespace gate;
 
+#if defined(PIO_UNIT_TESTING) || defined(UNIT_TEST)
+#define WITH_UNITY 1
+#include <unity.h>
+#define CHECK(cond, name) TEST_ASSERT_TRUE_MESSAGE((cond), name)
+#else
 static int failures = 0;
 static int checks = 0;
 
@@ -25,6 +34,7 @@ static int checks = 0;
       ++failures;                                                \
     }                                                            \
   } while (0)
+#endif
 
 static Config test_config() {
   Config c;
@@ -290,31 +300,53 @@ static void test_unlock_survives_millis_wraparound() {
   CHECK(out.action == Action::Relock, "retranca no tempo certo apos a virada");
 }
 
+// --- Runner ---------------------------------------------------------------
+
+#define ALL_TESTS(X) \
+  X(test_grant_opens_and_relocks) \
+  X(test_denial_shows_and_returns) \
+  X(test_timeout_denies) \
+  X(test_late_grant_does_not_unlock) \
+  X(test_grant_for_unknown_session_is_ignored) \
+  X(test_grant_while_idle_is_ignored) \
+  X(test_duplicate_grant_does_not_reopen) \
+  X(test_offline_does_not_read_badges) \
+  X(test_disconnect_while_waiting_denies) \
+  X(test_disconnect_does_not_cut_an_active_grant) \
+  X(test_same_badge_is_ignored_during_cooldown) \
+  X(test_cooldown_expires) \
+  X(test_cooldown_is_per_badge) \
+  X(test_badge_during_verification_is_ignored) \
+  X(test_badge_while_unlocked_is_ignored) \
+  X(test_empty_badge_is_ignored) \
+  X(test_sessions_do_not_repeat) \
+  X(test_reconnect_returns_to_idle) \
+  X(test_tick_stamped_before_the_grant_does_not_relock) \
+  X(test_tick_stamped_before_the_denial_keeps_it_on_screen) \
+  X(test_unlock_survives_millis_wraparound)
+
+#ifdef WITH_UNITY
+
+void setUp() {}
+void tearDown() {}
+
+int main() {
+  UNITY_BEGIN();
+#define RUN_ONE(name) RUN_TEST(name);
+  ALL_TESTS(RUN_ONE)
+#undef RUN_ONE
+  return UNITY_END();
+}
+
+#else
+
 int main() {
   std::printf("Maquina de estados do portao\n\n");
-
-  test_grant_opens_and_relocks();
-  test_denial_shows_and_returns();
-  test_timeout_denies();
-  test_late_grant_does_not_unlock();
-  test_grant_for_unknown_session_is_ignored();
-  test_grant_while_idle_is_ignored();
-  test_duplicate_grant_does_not_reopen();
-  test_offline_does_not_read_badges();
-  test_disconnect_while_waiting_denies();
-  test_disconnect_does_not_cut_an_active_grant();
-  test_same_badge_is_ignored_during_cooldown();
-  test_cooldown_expires();
-  test_cooldown_is_per_badge();
-  test_badge_during_verification_is_ignored();
-  test_badge_while_unlocked_is_ignored();
-  test_empty_badge_is_ignored();
-  test_sessions_do_not_repeat();
-  test_reconnect_returns_to_idle();
-  test_tick_stamped_before_the_grant_does_not_relock();
-  test_tick_stamped_before_the_denial_keeps_it_on_screen();
-  test_unlock_survives_millis_wraparound();
-
+#define RUN_ONE(name) name();
+  ALL_TESTS(RUN_ONE)
+#undef RUN_ONE
   std::printf("\n%d verificacoes, %d falhas\n", checks, failures);
   return failures == 0 ? 0 : 1;
 }
+
+#endif
