@@ -224,6 +224,65 @@ async def test_live_disabled_streams_plain_video():
     check(detector.calls == 0, "nenhuma inferencia com intervalo zero")
 
 
+class HangingDetector(ScriptedDetector):
+    """The first call never returns, as a stuck HTTP request would."""
+
+    def __init__(self, class_map):
+        super().__init__(class_map)
+        import threading
+        self.release = threading.Event()
+
+    def predictions(self, frame):
+        self.calls += 1
+        if self.calls == 1:
+            self.release.wait(10)
+        return list(self.script)
+
+
+async def test_hung_call_does_not_silence_the_live_view():
+    """A call that never answers must not stop every later one."""
+    detector = HangingDetector(CLASS_MAP)
+    live = LiveView(SyntheticCamera(), detector, interval_s=0.2, threshold=0.6, timeout_s=0.4)
+    live.viewer_joined()
+    task = asyncio.create_task(live.run())
+    errors_seen = []
+    try:
+        for _ in range(32):  # watch the state for 1.6 s
+            await asyncio.sleep(0.05)
+            error = live.snapshot()["error"]
+            if error:
+                errors_seen.append(error)
+        later = live.snapshot()
+    finally:
+        task.cancel()
+        detector.release.set()
+
+    check(any("resposta" in e for e in errors_seen), "chamada travada vira erro visivel")
+    check(detector.calls >= 2, "proximas chamadas seguem apos a travada")
+    check(later["source"] == "live" and later["fresh"], "caixas ao vivo voltam a aparecer")
+    check(later["error"] is None, "erro some quando o servico responde")
+    check(later["last_success_age_s"] is not None, "ultimo sucesso exposto no diagnostico")
+
+
+async def test_failing_calls_keep_the_loop_running():
+    class Failing(ScriptedDetector):
+        def predictions(self, frame):
+            self.calls += 1
+            raise RuntimeError("quota exceeded")
+
+    detector = Failing(CLASS_MAP)
+    live = LiveView(SyntheticCamera(), detector, interval_s=0.1, threshold=0.6, timeout_s=0.5)
+    live.viewer_joined()
+    task = asyncio.create_task(live.run())
+    try:
+        await asyncio.sleep(0.6)
+        snap = live.snapshot()
+    finally:
+        task.cancel()
+    check(detector.calls >= 3, "falhas nao derrubam o laco ao vivo")
+    check(snap["error"] == "quota exceeded", "motivo da falha exposto ao painel")
+
+
 async def main():
     print("Visão ao vivo\n")
     for name, fn in sorted(globals().items()):
