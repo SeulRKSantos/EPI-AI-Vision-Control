@@ -7,8 +7,9 @@ surface, which can evolve without touching what the devices speak.
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.core.badges import normalize_badge
 from app.db.models import AccessDecision
 
 
@@ -87,12 +88,19 @@ class EmployeeCreate(BaseModel):
     role_code: str = Field(min_length=1, max_length=50)
     is_active: bool = True
 
+    _normalize_badge = field_validator("badge_id", mode="before")(normalize_badge)
+
 
 class EmployeeUpdate(BaseModel):
+    # A new card for the same person. Their access history stays linked to
+    # them, and each past record keeps the badge that was actually used.
+    badge_id: str | None = Field(default=None, min_length=1, max_length=64)
     name: str | None = Field(default=None, min_length=1, max_length=150)
     registration: str | None = Field(default=None, max_length=50)
     role_code: str | None = Field(default=None, min_length=1, max_length=50)
     is_active: bool | None = None
+
+    _normalize_badge = field_validator("badge_id", mode="before")(normalize_badge)
 
 
 class EmployeeRead(ORMModel):

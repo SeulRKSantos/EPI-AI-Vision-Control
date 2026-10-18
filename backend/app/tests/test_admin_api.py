@@ -234,6 +234,77 @@ async def test_employees_can_be_filtered_by_role(client):
     assert [e["badge_id"] for e in listed] == ["B002"]
 
 
+async def test_badge_can_be_changed(client):
+    await make_role(client, "operator")
+    await client.post(
+        f"{PREFIX}/employees",
+        json={"badge_id": "B001", "name": "A", "role_code": "operator"},
+    )
+
+    response = await client.patch(f"{PREFIX}/employees/B001", json={"badge_id": "C9F2"})
+    assert response.status_code == 200, response.text
+    assert response.json()["badge_id"] == "C9F2"
+
+    # The old card no longer identifies anyone; the new one does.
+    assert (await client.get(f"{PREFIX}/employees/B001")).status_code == 404
+    assert (await client.get(f"{PREFIX}/employees/C9F2")).json()["name"] == "A"
+
+
+async def test_badge_change_to_a_card_in_use_is_refused(client):
+    await make_role(client, "operator")
+    for badge, name in (("B001", "A"), ("B002", "B")):
+        await client.post(
+            f"{PREFIX}/employees",
+            json={"badge_id": badge, "name": name, "role_code": "operator"},
+        )
+
+    response = await client.patch(f"{PREFIX}/employees/B001", json={"badge_id": "B002"})
+    assert response.status_code == 409
+    assert "B" in response.json()["detail"]
+
+    # Neither employee changed.
+    assert (await client.get(f"{PREFIX}/employees/B001")).json()["name"] == "A"
+    assert (await client.get(f"{PREFIX}/employees/B002")).json()["name"] == "B"
+
+
+async def test_keeping_the_same_badge_is_not_a_conflict(client):
+    await make_role(client, "operator")
+    await client.post(
+        f"{PREFIX}/employees",
+        json={"badge_id": "B001", "name": "A", "role_code": "operator"},
+    )
+    response = await client.patch(
+        f"{PREFIX}/employees/B001", json={"badge_id": "B001", "name": "A2"}
+    )
+    assert response.status_code == 200
+    assert response.json()["name"] == "A2"
+
+
+async def test_badges_are_stored_as_the_reader_reports_them(client):
+    """The gate sends uppercase hex; a badge typed in lowercase must match it."""
+    await make_role(client, "operator")
+    response = await client.post(
+        f"{PREFIX}/employees",
+        json={"badge_id": " 769f8205 ", "name": "A", "role_code": "operator"},
+    )
+    assert response.status_code == 201
+    assert response.json()["badge_id"] == "769F8205"
+    assert (await client.get(f"{PREFIX}/employees/769f8205")).status_code == 200
+
+    response = await client.patch(f"{PREFIX}/employees/769F8205", json={"badge_id": "e2f48105"})
+    assert response.json()["badge_id"] == "E2F48105"
+
+
+async def test_blank_new_badge_is_rejected(client):
+    await make_role(client, "operator")
+    await client.post(
+        f"{PREFIX}/employees",
+        json={"badge_id": "B001", "name": "A", "role_code": "operator"},
+    )
+    response = await client.patch(f"{PREFIX}/employees/B001", json={"badge_id": "   "})
+    assert response.status_code == 422
+
+
 # --- Validation ------------------------------------------------------------
 
 async def test_empty_badge_id_is_rejected(client):

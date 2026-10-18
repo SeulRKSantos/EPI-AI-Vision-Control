@@ -113,3 +113,11 @@ def test_openapi_document_is_generated():
     response = client.get("/openapi.json")
     assert response.status_code == 200
     assert "/health" in response.json()["paths"]
+
+
+def test_badge_scans_are_normalized_like_registrations():
+    """A gate that reports lowercase or padded ids still matches the database."""
+    from app.schemas.messages import BadgeScan
+
+    scan = BadgeScan(gate_code="gate-01", badge_id=" 769f8205 ")
+    assert scan.badge_id == "769F8205"

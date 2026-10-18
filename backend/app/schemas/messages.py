@@ -7,7 +7,9 @@ Changing a field here is a breaking change for the other two components.
 import uuid
 from datetime import datetime, timezone
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from app.core.badges import normalize_badge
 
 
 class BadgeScan(BaseModel):
@@ -19,6 +21,8 @@ class BadgeScan(BaseModel):
     gate_code: str
     badge_id: str
     scanned_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    _normalize_badge = field_validator("badge_id", mode="before")(normalize_badge)
 
 
 class VisionRequest(BaseModel):
