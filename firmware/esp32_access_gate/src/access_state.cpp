@@ -4,6 +4,26 @@
 
 namespace gate {
 
+namespace {
+
+/**
+ * Time from `since_ms` to `now_ms`, never negative.
+ *
+ * Events and ticks are stamped at slightly different moments: a decision is
+ * stamped while the network is serviced, after the loop already read the
+ * clock for its tick. Plain unsigned subtraction would turn "a few
+ * milliseconds in the future" into roughly 49 days, ending every timed
+ * state the instant it began — the lock would relock right after opening.
+ * The signed difference is correct for any span under 24 days and also
+ * survives millis() wrapping around.
+ */
+uint32_t elapsed_since(uint32_t now_ms, uint32_t since_ms) {
+  const int32_t delta = static_cast<int32_t>(now_ms - since_ms);
+  return delta > 0 ? static_cast<uint32_t>(delta) : 0;
+}
+
+}  // namespace
+
 bool StateMachine::same_badge(const char* badge_id) const {
   return has_last_badge_ && std::strncmp(last_badge_, badge_id, kBadgeLen - 1) == 0;
 }
@@ -37,7 +57,8 @@ Outcome StateMachine::on_badge(const char* badge_id, uint32_t now_ms) {
   // Only a settled gate starts a new verification.
   if (state_ != State::Idle) return {};
 
-  if (same_badge(badge_id) && (now_ms - last_badge_at_ms_) < config_.badge_cooldown_ms) {
+  if (same_badge(badge_id) &&
+      elapsed_since(now_ms, last_badge_at_ms_) < config_.badge_cooldown_ms) {
     return {};
   }
 
@@ -68,7 +89,7 @@ Outcome StateMachine::on_decision(uint32_t session_token, bool granted, uint32_t
 }
 
 Outcome StateMachine::tick(uint32_t now_ms) {
-  const uint32_t elapsed = now_ms - state_since_ms_;
+  const uint32_t elapsed = elapsed_since(now_ms, state_since_ms_);
 
   switch (state_) {
     case State::AwaitingDecision:

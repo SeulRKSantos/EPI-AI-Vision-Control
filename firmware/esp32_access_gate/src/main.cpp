@@ -145,6 +145,8 @@ void loop() {
     }
   }
 
-  apply(machine.tick(now));
+  // A fresh reading: a decision handled in net.loop() above was stamped
+  // after `now` was taken.
+  apply(machine.tick(millis()));
   leds.update(now);
 }

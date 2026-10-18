@@ -245,6 +245,51 @@ static void test_reconnect_returns_to_idle() {
   CHECK(m.state() == State::Idle, "pronto para ler");
 }
 
+// --- Clock ordering ------------------------------------------------------
+
+/// The loop reads the clock, then services the network, and a decision that
+/// arrives there is stamped a few milliseconds later. A tick carrying the
+/// earlier reading must not read as "the whole unlock period has passed".
+static void test_tick_stamped_before_the_grant_does_not_relock() {
+  auto m = online_machine();
+  m.on_badge("BADGE001", 1000);
+  m.on_decision(m.current_session(), true, 1530);
+
+  auto out = m.tick(1500);
+  CHECK(out.action == Action::None, "tick anterior a liberacao nao retranca");
+  CHECK(m.state() == State::Granted, "continua liberado");
+
+  out = m.tick(1530 + 4999);
+  CHECK(out.action == Action::None, "ainda dentro do tempo de abertura");
+
+  out = m.tick(1530 + 5000);
+  CHECK(out.action == Action::Relock, "retranca ao fim do tempo, contado da liberacao");
+}
+
+static void test_tick_stamped_before_the_denial_keeps_it_on_screen() {
+  auto m = online_machine();
+  m.on_badge("BADGE001", 1000);
+  m.on_decision(m.current_session(), false, 1530);
+
+  auto out = m.tick(1500);
+  CHECK(out.action == Action::None, "recusa nao some no mesmo instante");
+  CHECK(m.state() == State::Denied, "continua mostrando a recusa");
+}
+
+static void test_unlock_survives_millis_wraparound() {
+  // millis() wraps after about 49.7 days of uptime.
+  const uint32_t near_wrap = 0xFFFFFFFFu - 1000;
+  auto m = online_machine(near_wrap - 2000);
+  m.on_badge("BADGE001", near_wrap - 1000);
+  m.on_decision(m.current_session(), true, near_wrap);
+
+  auto out = m.tick(near_wrap + 3000);  // wrapped past zero
+  CHECK(out.action == Action::None, "virada do relogio nao retranca cedo");
+
+  out = m.tick(near_wrap + 5000);
+  CHECK(out.action == Action::Relock, "retranca no tempo certo apos a virada");
+}
+
 int main() {
   std::printf("Maquina de estados do portao\n\n");
 
@@ -266,6 +311,9 @@ int main() {
   test_empty_badge_is_ignored();
   test_sessions_do_not_repeat();
   test_reconnect_returns_to_idle();
+  test_tick_stamped_before_the_grant_does_not_relock();
+  test_tick_stamped_before_the_denial_keeps_it_on_screen();
+  test_unlock_survives_millis_wraparound();
 
   std::printf("\n%d verificacoes, %d falhas\n", checks, failures);
   return failures == 0 ? 0 : 1;
