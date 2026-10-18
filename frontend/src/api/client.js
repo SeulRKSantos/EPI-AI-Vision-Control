@@ -16,6 +16,11 @@ const BASE =
   `${window.location.protocol}//${window.location.hostname}:8000`;
 const V1 = `${BASE}/api/v1`;
 
+// The vision service publishes the camera on its own port, on the same host.
+const VISION =
+  import.meta.env.VITE_VISION_URL ||
+  `${window.location.protocol}//${window.location.hostname}:8081`;
+
 export class ApiError extends Error {
   constructor(message, status) {
     super(message);
@@ -103,6 +108,19 @@ export const api = {
 
   accessLogs: {
     list: (params) => request(`/access-logs${query(params)}`),
+  },
+
+  vision: {
+    streamUrl: () => `${VISION}/stream.mjpg`,
+    detections: async () => {
+      const response = await fetch(`${VISION}/detections`);
+      if (!response.ok) throw new ApiError("Serviço de visão indisponível.", response.status);
+      return response.json();
+    },
+    health: async () => {
+      const response = await fetch(`${VISION}/health`);
+      return { ok: response.ok, ...(await response.json().catch(() => ({}))) };
+    },
   },
 
   gates: {

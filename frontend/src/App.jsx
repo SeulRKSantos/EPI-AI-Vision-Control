@@ -13,12 +13,16 @@ import { api } from "./api/client";
 import { ToastHost } from "./components/ui";
 import { ToastProvider } from "./hooks/useToast";
 import AccessLogs from "./pages/AccessLogs";
+import CameraView from "./pages/CameraView";
 import Employees from "./pages/Employees";
+import GateTest from "./pages/GateTest";
 import Matrix from "./pages/Matrix";
 import { PPETypes, Roles } from "./pages/Registries";
 
 const NAV = [
   { to: "/", label: "Matriz de exigências", end: true },
+  { to: "/camera", label: "Visão do portão" },
+  { to: "/portao", label: "Testar portão" },
   { to: "/funcionarios", label: "Funcionários" },
   { to: "/funcoes", label: "Funções" },
   { to: "/equipamentos", label: "Equipamentos" },
@@ -33,6 +37,8 @@ export default function App() {
         <main className="flex-1 px-6 py-8 lg:px-10 lg:py-10 max-w-[1400px]">
           <Routes>
             <Route path="/" element={<Matrix />} />
+            <Route path="/camera" element={<CameraView />} />
+            <Route path="/portao" element={<GateTest />} />
             <Route path="/funcionarios" element={<Employees />} />
             <Route path="/funcoes" element={<Roles />} />
             <Route path="/equipamentos" element={<PPETypes />} />
@@ -86,11 +92,17 @@ function SystemStatus() {
   useEffect(() => {
     let active = true;
     const check = async () => {
+      let camera = false;
+      try {
+        camera = (await api.vision.health()).ok;
+      } catch {
+        camera = false;
+      }
       try {
         const body = await api.health();
-        if (active) setState({ status: "up", checks: body.checks });
+        if (active) setState({ status: "up", checks: body.checks, camera });
       } catch {
-        if (active) setState({ status: "down" });
+        if (active) setState({ status: "down", camera });
       }
     };
     check();
@@ -106,6 +118,7 @@ function SystemStatus() {
       ? [
           { label: "Banco de dados", ok: state.checks?.database === "ok" },
           { label: "Portão (MQTT)", ok: state.checks?.mqtt === "ok" },
+          { label: "Câmera", ok: Boolean(state.camera) },
         ]
       : [];
 
