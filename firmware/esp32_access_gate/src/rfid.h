@@ -16,6 +16,15 @@ class RfidReader {
 
   void begin();
 
+  /// Re-initializes the reader. The RC522 can stop detecting cards after a
+  /// dip or spike on its supply — the relay switching on a shared 3.3V rail
+  /// does exactly that — while still looking alive. A re-init clears it.
+  /// Returns whether the reader answered afterwards.
+  bool reinit();
+
+  /// Reads the version register now. False when nothing answers on the bus.
+  bool responsive();
+
   /// Reads a card if one is present. Returns false when there is none.
   /// `out_uid` receives a null-terminated uppercase hex string.
   bool read(char* out_uid, uint8_t out_size);

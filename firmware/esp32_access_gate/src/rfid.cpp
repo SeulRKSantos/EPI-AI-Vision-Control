@@ -17,12 +17,21 @@ char hex_digit(uint8_t value) {
 
 void RfidReader::begin() {
   SPI.begin();
+  reinit();
+}
+
+bool RfidReader::reinit() {
   reader.PCD_Init();
   delay(50);
+  return responsive();
+}
 
-  // A reader that failed to initialize reports version 0x00 or 0xFF.
+bool RfidReader::responsive() {
+  // A reader that failed to initialize, or fell off the bus, reports version
+  // 0x00 or 0xFF.
   version_ = reader.PCD_ReadRegister(MFRC522::VersionReg);
   healthy_ = (version_ != 0x00 && version_ != 0xFF);
+  return healthy_;
 }
 
 bool RfidReader::read(char* out_uid, uint8_t out_size) {

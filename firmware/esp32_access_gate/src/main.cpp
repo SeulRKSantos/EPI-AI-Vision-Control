@@ -41,6 +41,22 @@ Indicators leds;
 
 bool was_online = false;
 
+/// How often an idle gate confirms the reader still answers.
+constexpr uint32_t kReaderCheckMs = 10000;
+uint32_t last_reader_check_ms = 0;
+
+/// A reader that stopped answering — at boot or later — is brought back
+/// without a reboot. Only while idle, so a check never lands mid-verification.
+void watch_reader(uint32_t now) {
+  if (machine.state() != gate::State::Idle && rfid.healthy()) return;
+  if (now - last_reader_check_ms < kReaderCheckMs) return;
+  last_reader_check_ms = now;
+
+  if (rfid.responsive()) return;
+  Serial.println(F("leitor RFID sem resposta, reiniciando"));
+  if (rfid.reinit()) Serial.println(F("leitor RFID de volta"));
+}
+
 void apply(const gate::Outcome& outcome, const char* badge_id = nullptr) {
   switch (outcome.action) {
     case gate::Action::Unlock:
@@ -53,6 +69,11 @@ void apply(const gate::Outcome& outcome, const char* badge_id = nullptr) {
       lock.relock();
       leds.set(Indicators::Mode::Idle);
       Serial.println(F("fechadura retrancada"));
+      // Switching the relay disturbs the supply the reader shares, and the
+      // RC522 can come out of it deaf to cards while still answering on the
+      // bus. Re-initializing it here is cheap and the gate is idle anyway.
+      delay(30);  // let the contact settle first
+      if (!rfid.reinit()) Serial.println(F("ERRO: leitor RFID nao respondeu apos retrancar"));
       break;
 
     case gate::Action::ShowWaiting:
@@ -148,5 +169,6 @@ void loop() {
   // A fresh reading: a decision handled in net.loop() above was stamped
   // after `now` was taken.
   apply(machine.tick(millis()));
+  watch_reader(now);
   leds.update(now);
 }
