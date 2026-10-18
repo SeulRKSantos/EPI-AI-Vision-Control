@@ -1,13 +1,17 @@
 """Employee administration."""
 
+import logging
+
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import DbSession
+from app.core.badges import normalize_badge
 from app.db.models import Employee, Role
 from app.schemas.entities import EmployeeCreate, EmployeeRead, EmployeeUpdate
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/employees", tags=["employees"])
 
 
@@ -69,8 +73,32 @@ async def get_employee(badge_id: str, db: DbSession) -> Employee:
 async def update_employee(
     badge_id: str, body: EmployeeUpdate, db: DbSession
 ) -> Employee:
+    """Updates an employee, including handing them a different card.
+
+    Changing the badge keeps the person's access history: records are linked
+    to the employee, and each one keeps the badge that was used at the time.
+    The old card stops working at once, and a card registered to someone
+    else is refused rather than silently taken over.
+    """
     employee = await _get_or_404(badge_id, db)
     data = body.model_dump(exclude_unset=True)
+
+    new_badge = data.pop("badge_id", None)
+    if new_badge is not None and new_badge != employee.badge_id:
+        holder = (
+            await db.execute(select(Employee).where(Employee.badge_id == new_badge))
+        ).scalar_one_or_none()
+        if holder is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Badge '{new_badge}' is already registered to {holder.name}",
+            )
+        logger.info(
+            "Badge reassigned",
+            extra={"employee_id": employee.id, "old_badge": employee.badge_id,
+                   "new_badge": new_badge},
+        )
+        employee.badge_id = new_badge
 
     if "role_code" in data:
         role = await _role_or_422(data.pop("role_code"), db)
@@ -79,7 +107,15 @@ async def update_employee(
     for field, value in data.items():
         setattr(employee, field, value)
 
-    await db.flush()
+    try:
+        await db.flush()
+    except IntegrityError:
+        # Another request took the badge between the check and the write.
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Badge '{new_badge}' is already registered",
+        ) from None
     await db.refresh(employee)
     return employee
 
@@ -102,7 +138,10 @@ async def deactivate_employee(badge_id: str, db: DbSession) -> None:
 
 
 async def _get_or_404(badge_id: str, db: DbSession) -> Employee:
-    stmt = select(Employee).where(Employee.badge_id == badge_id)
+    # Exact match first covers rows registered before ids were normalized.
+    stmt = select(Employee).where(
+        Employee.badge_id.in_({badge_id, normalize_badge(badge_id)})
+    )
     employee = (await db.execute(stmt)).scalar_one_or_none()
     if employee is None:
         raise HTTPException(

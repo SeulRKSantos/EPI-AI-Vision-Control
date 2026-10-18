@@ -2,9 +2,9 @@
  * Employee and badge management.
  *
  * The badge identifier is the key the gate reads, so it is shown in a
- * monospaced face and cannot be edited after registration — changing it
- * would silently break the link between a person and their access history.
- * A badge that changed hands is a new registration.
+ * monospaced face and in the reader's own format (uppercase hex). It can be
+ * changed to hand someone a different card: access history is linked to the
+ * person, and each past record keeps the badge that was actually used.
  */
 
 import { useState } from "react";
@@ -204,22 +204,36 @@ function EmployeeForm({ target, roles, onClose, onSaved }) {
         });
         push(`${form.name} cadastrado.`);
       } else {
-        await api.employees.update(employee.badge_id, {
+        const newBadge = form.badge_id.trim().toUpperCase();
+        const changes = {
           name: form.name.trim(),
           registration: form.registration.trim() || null,
           role_code: form.role_code,
-        });
-        push(`${form.name} atualizado.`);
+        };
+        if (newBadge !== employee.badge_id) changes.badge_id = newBadge;
+        await api.employees.update(employee.badge_id, changes);
+        push(
+          changes.badge_id
+            ? `${form.name} atualizado. Crachá trocado para ${newBadge}.`
+            : `${form.name} atualizado.`
+        );
       }
       onSaved();
     } catch (err) {
-      push(err.message, "error");
+      push(
+        err.status === 409
+          ? `O cartão ${form.badge_id.trim().toUpperCase()} já está cadastrado para outro funcionário.`
+          : err.message,
+        "error"
+      );
     } finally {
       setBusy(false);
     }
   };
 
   const set = (field) => (event) => setForm({ ...form, [field]: event.target.value });
+  const badgeChanged =
+    !isNew && form.badge_id.trim() !== "" && form.badge_id.trim() !== employee.badge_id;
 
   return (
     <Modal
@@ -233,13 +247,14 @@ function EmployeeForm({ target, roles, onClose, onSaved }) {
           hint={
             isNew
               ? "Identificador lido pelo leitor RFID no portão."
-              : "O crachá não pode ser alterado. Para trocar, cadastre outro funcionário."
+              : badgeChanged
+                ? `O cartão ${employee.badge_id} deixa de funcionar ao salvar. O histórico continua ligado a este funcionário.`
+                : "Para entregar outro cartão, digite o novo identificador."
           }
         >
           <Input
             value={form.badge_id}
-            onChange={set("badge_id")}
-            disabled={!isNew}
+            onChange={(event) => setForm({ ...form, badge_id: event.target.value.toUpperCase() })}
             required
             maxLength={64}
             className="font-mono"
