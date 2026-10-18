@@ -1,0 +1,44 @@
+#pragma once
+
+/**
+ * Deployment settings.
+ *
+ * Copy this file to `config.h` and fill it in. `config.h` is not versioned:
+ * it carries the network credentials for the site where the gate is
+ * installed.
+ */
+
+// --- Network ------------------------------------------------------------
+constexpr char WIFI_SSID[] = "sua-rede";
+constexpr char WIFI_PASSWORD[] = "sua-senha";
+
+// --- Broker -------------------------------------------------------------
+constexpr char MQTT_HOST[] = "192.168.15.18";
+constexpr uint16_t MQTT_PORT = 1883;
+constexpr char MQTT_USERNAME[] = "";   // empty when the broker allows anonymous
+constexpr char MQTT_PASSWORD[] = "";
+
+/// Identifies this gate in every topic. Must match a `gates.code` row in the
+/// backend, otherwise the access log cannot attribute the attempt.
+constexpr char GATE_CODE[] = "gate-01";
+
+// --- Timing -------------------------------------------------------------
+
+/**
+ * How long to wait for a decision. Must exceed the backend's
+ * SESSION_TIMEOUT_SECONDS, or the gate gives up while a legitimate answer is
+ * still in flight — and the person is refused for no reason.
+ */
+constexpr uint32_t DECISION_TIMEOUT_MS = 12000;
+
+/// How long the lock stays released after a grant.
+constexpr uint32_t UNLOCK_DURATION_MS = 20000;
+
+/// How long a refusal is shown before the reader accepts a badge again.
+constexpr uint32_t DENIED_DISPLAY_MS = 3000;
+
+/// Ignore repeated reads of the same badge within this window.
+constexpr uint32_t BADGE_COOLDOWN_MS = 5000;
+
+/// Interval between availability messages published to the status topic.
+constexpr uint32_t HEARTBEAT_INTERVAL_MS = 30000;
