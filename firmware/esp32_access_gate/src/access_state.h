@@ -28,7 +28,6 @@ enum class State : uint8_t {
 
 enum class Action : uint8_t {
   None,
-  PublishScan,   // send the badge to the backend
   Unlock,        // energize the release
   Relock,        // return the lock to its resting state
   ShowWaiting,   // indicators: verification in progress
@@ -56,6 +55,12 @@ struct Config {
 struct Outcome {
   Action action = Action::None;
   bool publish_scan = false;
+
+  // Explicit constructors keep `return {Action::X, false};` valid on the
+  // ESP32 toolchain, which builds as C++11: there, a struct with default
+  // member initializers is not an aggregate and cannot be brace-initialized.
+  Outcome() = default;
+  Outcome(Action a, bool publish) : action(a), publish_scan(publish) {}
 };
 
 class StateMachine {
