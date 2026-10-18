@@ -21,8 +21,8 @@ void RfidReader::begin() {
   delay(50);
 
   // A reader that failed to initialize reports version 0x00 or 0xFF.
-  const uint8_t version = reader.PCD_ReadRegister(MFRC522::VersionReg);
-  healthy_ = (version != 0x00 && version != 0xFF);
+  version_ = reader.PCD_ReadRegister(MFRC522::VersionReg);
+  healthy_ = (version_ != 0x00 && version_ != 0xFF);
 }
 
 bool RfidReader::read(char* out_uid, uint8_t out_size) {

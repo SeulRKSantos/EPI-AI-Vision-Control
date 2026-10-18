@@ -24,6 +24,12 @@ class RfidReader {
   /// never initialized would otherwise look identical to "no card present".
   bool healthy() const { return healthy_; }
 
+  /// Raw VersionReg value read at startup. Genuine chips answer 0x91 or
+  /// 0x92; clones often report other values and still work. 0x00 or 0xFF
+  /// means nothing answered on the SPI bus.
+  uint8_t version() const { return version_; }
+
  private:
   bool healthy_ = false;
+  uint8_t version_ = 0;
 };

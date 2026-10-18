@@ -15,11 +15,32 @@ The device decides nothing about PPE. It reports a badge and obeys a decision, w
 | | RST | GPIO 4 |
 | | VCC | **3V3** |
 | Relay module | IN | GPIO 26 |
-| | VCC | 5V |
+| | VCC | **3V3** (see below) |
 | Green LED | anode via 220–330 Ω | GPIO 25 |
 | Red LED | anode via 220–330 Ω | GPIO 27 |
 
-The RC522 is a 3.3 V part; powering it from 5 V damages it. The 12 V lock runs from its own supply and is switched by the relay contacts — the ESP32 never carries lock current. Grounds are joined only on the module's low-voltage side.
+The RC522 is a 3.3 V part; powering it from 5 V damages it.
+
+The relay module is fed from **3V3**, not 5V. Common 5V relay boards with an optocoupler input do not switch off from the ESP32's 3.3 V high level when fed from 5V: the relay stays on or chatters. Fed from 3V3, the input works at the pin's level, and the 5V coil on this board still pulls in reliably. If a different board does not pull in at 3.3 V, see the options in `include/pins.h`.
+
+The lock is wired to the relay's **NC** contact: it is a lock that holds while powered, so at rest the relay is off and the lock is powered and closed; a grant energizes the relay, which cuts the lock's power for the release period. Loss of the 12 V supply releases the door, which is the expected behaviour on an escape route. The 12 V lock runs from its own supply and is switched by the relay contacts — the ESP32 never carries lock current. Grounds are joined only on the module's low-voltage side.
+
+## Hardware bring-up
+
+Before flashing the gate, check the wiring with the bench program in `src/hwtest`. It needs no `config.h` and no network:
+
+```bash
+pio run -e hwtest -t upload
+pio device monitor -e hwtest
+```
+
+It reports whether the RC522 answers, prints the UID of every card held to the reader (in the exact format to register as a badge in the panel), and lets you drive the relay pin and the LEDs by hand from the serial monitor.
+
+Use it to settle the two polarity constants:
+
+1. With the lock disconnected, type `1` and `0`. The level that lights the relay module's LED energizes the coil. If that is `LOW`, keep `RELAY_ACTIVE_LOW = true`; if it is `HIGH`, set it to `false`.
+2. With the lock connected, energize the coil. If the lock releases, keep `RELAY_ENERGIZE_TO_UNLOCK = true`; if it closes, set it to `false`.
+3. Reflash the bench program and type `a`. The lock should open for three seconds and close again, exactly as the gate does on a grant.
 
 ## Lock polarity
 

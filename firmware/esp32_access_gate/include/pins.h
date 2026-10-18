@@ -45,6 +45,26 @@ constexpr uint8_t PIN_RELAY = 26;
  */
 constexpr bool RELAY_ACTIVE_LOW = true;
 
+/*
+ * 5V relay boards with an optocoupler input are built for 5V logic. Fed from
+ * 5V and driven by the ESP32's 3.3V high level, their optocoupler keeps
+ * conducting a little: the relay stays on or chatters and never releases.
+ * No pin mode fixes this — the ESP32's protection diodes hold any pin at
+ * about 3.3V, open drain included. The fix is in the wiring, any one of:
+ *
+ *   1. Feed the board's VCC from 3V3 instead of 5V, so its input works at the
+ *      same level as the pin. Works when the 5V coil still pulls in at 3.3V,
+ *      which many do but not all.
+ *   2. Keep VCC on 5V and put a diode or an LED in series with IN, cathode
+ *      towards the ESP32. Its forward drop keeps the optocoupler off at 3.3V
+ *      and still lets the pin pull it on at 0V.
+ *   3. Drive IN through an NPN transistor (1k to the base, 10k base to
+ *      ground). The cleanest fix; it inverts the logic, so set
+ *      RELAY_ACTIVE_LOW to false.
+ *
+ * Options 1 and 2 keep RELAY_ACTIVE_LOW = true.
+ */
+
 /**
  * Whether energizing the relay releases the lock.
  *
