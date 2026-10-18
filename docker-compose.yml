@@ -22,17 +22,17 @@ services:
       - "5432:5432"
 
   backend:
-    restart: unless-stopped
     build:
       context: ./backend
+    restart: unless-stopped
     env_file: .env
     depends_on:
       - db
       - mosquitto
-    ports:
-      - "8000:8000"
     volumes:
       - ./backend/app:/app/app
+    ports:
+      - "8000:8000"
 
   frontend:
     build:
@@ -47,15 +47,17 @@ services:
     build:
       context: ./vision
     restart: unless-stopped
-    environment:
-      MQTT_CLIENT_ID: epi-vision
     env_file: .env
+    environment:
+      MQTT_CLIENT_ID: epi-vision        # must differ from the backend's client id
     depends_on:
       - mosquitto
     devices:
-      - /dev/video0:/dev/video0
+      - /dev/video0:/dev/video0         # host webcam
     volumes:
       - ./training/weights:/app/models:ro
+    ports:
+      - "8081:8081"                     # live camera stream for the panel
 
 volumes:
   db_data:

@@ -35,6 +35,25 @@ class Detection:
     confidence: float
 
 
+@dataclass(frozen=True)
+class Box:
+    """A prediction placed on the frame, for drawing.
+
+    Unlike `Detection`, every prediction becomes a box — including classes
+    with no mapping, such as the distractors. Seeing them drawn is how a
+    person tells "the camera missed the goggles" from "the camera saw
+    something else there".
+    """
+
+    class_name: str
+    ppe_code: str | None
+    confidence: float
+    x1: int
+    y1: int
+    x2: int
+    y2: int
+
+
 class Detector:
     def __init__(
         self,
@@ -70,20 +89,51 @@ class Detector:
         """The PPE code for a model class, or None when it has no mapping."""
         return self._class_map.get(normalize_class_name(class_name))
 
-    def detect(self, frame) -> list[Detection]:
+    def predictions(self, frame) -> list[dict]:
+        """Runs the model on a frame and returns the raw predictions.
+
+        One call serves both consumers: the detections published to the
+        backend and the boxes drawn on the live view come from the same
+        inference, so what the person sees is what the gate decided on.
+        """
         result = self._client.run_workflow(
             workspace_name=self._workspace,
             workflow_id=self._workflow,
             images={"image": frame},
             use_cache=True,
         )
-        return self.parse(result)
+        return list(self._iter_predictions(result))
+
+    def detect(self, frame) -> list[Detection]:
+        return self.parse_predictions(self.predictions(frame))
 
     def parse(self, result) -> list[Detection]:
         """Turns a workflow response into detections the backend understands."""
+        return self.parse_predictions(self._iter_predictions(result))
+
+    def boxes(self, predictions) -> list[Box]:
+        """Every prediction with usable coordinates, mapped or not."""
+        out: list[Box] = []
+        for prediction in predictions:
+            class_name = prediction.get("class") or prediction.get("class_name") or ""
+            x, y = prediction.get("x"), prediction.get("y")
+            w, h = prediction.get("width"), prediction.get("height")
+            if not class_name or None in (x, y, w, h):
+                continue
+            out.append(Box(
+                class_name=class_name,
+                ppe_code=self.map_class(class_name),
+                confidence=float(prediction.get("confidence", 0.0)),
+                x1=int(x - w / 2), y1=int(y - h / 2),
+                x2=int(x + w / 2), y2=int(y + h / 2),
+            ))
+        return out
+
+    def parse_predictions(self, predictions) -> list[Detection]:
+        """Maps raw predictions onto the PPE codes the backend knows."""
         detections: list[Detection] = []
 
-        for prediction in self._iter_predictions(result):
+        for prediction in predictions:
             class_name = (
                 prediction.get("class")
                 or prediction.get("class_name")

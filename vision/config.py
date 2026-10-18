@@ -47,6 +47,21 @@ class Settings:
     # timeout; failing faster here lets the gate answer sooner.
     inference_timeout_s: float = float(os.getenv("INFERENCE_TIMEOUT_SECONDS", "6.0"))
 
+    # --- Live view (panel) ---
+    http_port: int = int(os.getenv("VISION_HTTP_PORT", "8081"))
+    stream_fps: float = float(os.getenv("STREAM_FPS", "10"))
+    stream_max_width: int = int(os.getenv("STREAM_MAX_WIDTH", "960"))
+    # Seconds between inferences that draw boxes on the live view, run only
+    # while someone is watching. Each one is a billed call to the model API,
+    # so this is a cost knob as much as a smoothness one. 0 turns the live
+    # boxes off and leaves the plain video.
+    live_inference_interval_s: float = float(
+        os.getenv("LIVE_INFERENCE_INTERVAL_SECONDS", "1.5")
+    )
+    # Only colours the boxes. The decision itself is the backend's, which
+    # reads the same variable from the shared .env.
+    display_threshold: float = float(os.getenv("DETECTION_CONFIDENCE_THRESHOLD", "0.6"))
+
     # --- Behaviour ---
     # Detections are published with raw confidence. The acceptance threshold
     # is the backend's policy, not the model's, so it can be tuned without

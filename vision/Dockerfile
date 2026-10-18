@@ -15,4 +15,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
+# Live view for the panel: MJPEG stream and detection JSON.
+EXPOSE 8081
+
 CMD ["python", "inference_worker.py"]

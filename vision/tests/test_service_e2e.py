@@ -50,20 +50,32 @@ class FakeCamera:
 
 
 class FakeDetector:
+    """Stands in for the model. Speaks the same interface the service uses."""
+
     def __init__(self, detections=None, raises=False, delay=0.0):
         self._detections = detections or []
         self._raises = raises
         self._delay = delay
         self.calls = 0
 
-    def detect(self, frame):
+    def predictions(self, frame):
         self.calls += 1
         if self._delay:
             import time
             time.sleep(self._delay)
         if self._raises:
             raise RuntimeError("inference exploded")
-        return self._detections
+        return [
+            {"class": d.ppe_code, "confidence": d.confidence,
+             "x": 100, "y": 100, "width": 40, "height": 40}
+            for d in self._detections
+        ]
+
+    def parse_predictions(self, predictions):
+        return [Detection(p["class"], p["confidence"]) for p in predictions]
+
+    def boxes(self, predictions):
+        return []
 
 
 async def run_service(service, stop: asyncio.Event):

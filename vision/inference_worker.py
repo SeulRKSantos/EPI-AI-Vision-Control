@@ -20,9 +20,11 @@ from pathlib import Path
 
 import aiomqtt
 
+import http_server
 from camera import Camera
 from config import settings
 from detector import Detector
+from live import LiveView
 
 logger = logging.getLogger("vision")
 
@@ -61,9 +63,10 @@ def gate_from_topic(topic: str) -> str | None:
 
 
 class VisionService:
-    def __init__(self, camera: Camera, detector: Detector) -> None:
+    def __init__(self, camera: Camera, detector: Detector, live: LiveView | None = None) -> None:
         self._camera = camera
         self._detector = detector
+        self._live = live
         # Inference is a blocking HTTP call. Running it in a worker thread
         # keeps the MQTT loop free, so a second request is read rather than
         # queued behind the first.
@@ -107,10 +110,11 @@ class VisionService:
 
         try:
             loop = asyncio.get_running_loop()
-            detections = await asyncio.wait_for(
-                loop.run_in_executor(self._pool, self._detector.detect, frame),
+            predictions = await asyncio.wait_for(
+                loop.run_in_executor(self._pool, self._detector.predictions, frame),
                 timeout=settings.inference_timeout_s,
             )
+            detections = self._detector.parse_predictions(predictions)
         except asyncio.TimeoutError:
             logger.error(
                 "Inference timed out; no result will be published",
@@ -125,6 +129,16 @@ class VisionService:
             return
 
         elapsed_ms = (time.monotonic() - started) * 1000.0
+
+        if self._live is not None:
+            # The boxes of the very inference that decides this attempt, so
+            # the panel shows what the gate saw rather than a later frame.
+            self._live.publish(
+                self._detector.boxes(predictions),
+                source="scan",
+                latency_ms=elapsed_ms,
+                session_id=session_id,
+            )
 
         if settings.save_snapshots:
             self._save_snapshot(frame, session_id)
@@ -190,12 +204,26 @@ async def run() -> None:
         workflow=settings.roboflow_workflow,
         class_map=settings.class_map,
     )
-    service = VisionService(camera, detector)
+    live = LiveView(
+        camera,
+        detector,
+        interval_s=settings.live_inference_interval_s,
+        threshold=settings.display_threshold,
+    )
+    service = VisionService(camera, detector, live)
 
     logger.info(
         "Vision service starting",
-        extra={"mapped_classes": sorted(set(settings.class_map.values()))},
+        extra={"mapped_classes": sorted(
+            {v for k, v in settings.class_map.items() if not k.startswith("_")}
+        )},
     )
+
+    runner = await http_server.start(
+        http_server.build_app(camera, live, settings.stream_fps, settings.stream_max_width),
+        settings.http_port,
+    )
+    live_task = asyncio.create_task(live.run(), name="live-view")
 
     try:
         while True:
@@ -231,6 +259,9 @@ async def run() -> None:
                 )
                 await asyncio.sleep(3.0)
     finally:
+        live_task.cancel()
+        live.shutdown()
+        await runner.cleanup()
         service.shutdown()
         camera.stop()
 
